@@ -1,0 +1,14 @@
+doc/
+design/
+php2go.exe
+php2go
+
+# Assets Vite (générés)
+static/dist/
+
+# Go
+*.test
+go.work*
+
+# IA
+CLAUDE.md

@@ -9,7 +9,8 @@ import (
 
 // Config holds the configuration for a goWebFlow application.
 type Config struct {
-	TemplateDir string // path to the folder containing HTML templates
+	LayoutDir   string // path to layouts folder (e.g. ./ui/layouts)
+	PageDir     string // path to pages folder (e.g. ./ui/pages)
 	StaticDir   string // path to the Vite build output folder (e.g. ./ui/dist)
 	StaticURL   string // URL prefix used to serve static assets (e.g. /static/)
 	ActiveTheme string // nouveau — sous-dossier de StaticDir (ex: "default")
@@ -19,12 +20,12 @@ type Config struct {
 // App is the central object of the framework.
 // It holds the router, the template engine and the configuration.
 type App struct {
-	config      Config
-	mux         *http.ServeMux
-	templates   *template.Template
-	vite        *viteManifest
-	mu          sync.RWMutex
-	activeTheme string
+	config        Config
+	mux           *http.ServeMux
+	templates     *template.Template
+	vite          *viteManifest
+	mu            sync.RWMutex
+	activeTheme   string
 	errorHandlers map[int]HandlerFunc
 }
 

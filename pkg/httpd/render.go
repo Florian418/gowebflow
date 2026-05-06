@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 )
 
-// LoadTemplates parses all .html files in the configured TemplateDir.
+// LoadTemplates parses all .html files in LayoutDir and caches them.
 // It registers the "vite" template function for asset injection.
 // It is called automatically by New, and on every request in Dev mode.
 func (a *App) LoadTemplates() error {
-	pattern := filepath.Join(a.config.TemplateDir, "*.html")
+	pattern := filepath.Join(a.config.LayoutDir, "*.html")
 
 	tpl, err := template.New("").Funcs(template.FuncMap{
 		"vite": func(entry string) template.HTML {
@@ -26,8 +26,9 @@ func (a *App) LoadTemplates() error {
 	if err != nil {
 		return err
 	}
-
+	a.mu.Lock()
 	a.templates = tpl
+	a.mu.Unlock()
 	return nil
 }
 
@@ -40,5 +41,17 @@ func (a *App) Render(w http.ResponseWriter, name string, data any) error {
 			return err
 		}
 	}
-	return a.templates.ExecuteTemplate(w, name, data)
+	a.mu.RLock()
+	base := a.templates
+	a.mu.RUnlock()
+
+	tpl, err := base.Clone()
+	if err != nil {
+		return err
+	}
+	pageFile := filepath.Join(a.config.PageDir, name)
+	if _, err = tpl.ParseFiles(pageFile); err != nil {
+		return err
+	}
+	return tpl.ExecuteTemplate(w, "base", data)
 }

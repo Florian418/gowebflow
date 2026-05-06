@@ -12,14 +12,23 @@ import (
 	"testing"
 )
 
-// newTestApp creates a temporary App with the given templates for testing.
-func newTestApp(t *testing.T, templates map[string]string) *httpd.App {
+const baseLayout = `{{define "base"}}{{block "content" .}}{{end}}{{end}}`
+
+// newTestApp creates a temporary App with the given layouts and pages for testing.
+func newTestApp(t *testing.T, layouts map[string]string, pages map[string]string) *httpd.App {
 	t.Helper()
 	dir := t.TempDir()
-	for name, content := range templates {
-		os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
+	layoutDir := filepath.Join(dir, "layouts")
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(layoutDir, 0755)
+	os.MkdirAll(pageDir, 0755)
+	for name, content := range layouts {
+		os.WriteFile(filepath.Join(layoutDir, name), []byte(content), 0644)
 	}
-	app, err := httpd.New(httpd.Config{TemplateDir: dir})
+	for name, content := range pages {
+		os.WriteFile(filepath.Join(pageDir, name), []byte(content), 0644)
+	}
+	app, err := httpd.New(httpd.Config{LayoutDir: layoutDir, PageDir: pageDir})
 	if err != nil {
 		t.Fatalf("newTestApp: %v", err)
 	}
@@ -27,25 +36,27 @@ func newTestApp(t *testing.T, templates map[string]string) *httpd.App {
 }
 
 func TestNew(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Test</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}<h1>Test</h1>{{end}}`},
+	)
 	if app == nil {
 		t.Fatal("expected non-nil App")
 	}
 }
 
-func TestNewInvalidTemplateDir(t *testing.T) {
-	_, err := httpd.New(httpd.Config{TemplateDir: "./nonexistent"})
+func TestNewInvalidLayoutDir(t *testing.T) {
+	_, err := httpd.New(httpd.Config{LayoutDir: "./nonexistent", PageDir: "./nonexistent"})
 	if err == nil {
-		t.Fatal("expected error for invalid template dir, got nil")
+		t.Fatal("expected error for invalid layout dir, got nil")
 	}
 }
 
 func TestRender(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Bonjour</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}<h1>Bonjour</h1>{{end}}`},
+	)
 
 	w := httptest.NewRecorder()
 	if err := app.Render(w, "home.html", nil); err != nil {
@@ -58,9 +69,10 @@ func TestRender(t *testing.T) {
 }
 
 func TestRenderWithData(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>{{ .Title }}</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}<h1>{{ .Title }}</h1>{{end}}`},
+	)
 
 	w := httptest.NewRecorder()
 	err := app.Render(w, "home.html", map[string]any{"Title": "goWebFlow"})
@@ -73,10 +85,34 @@ func TestRenderWithData(t *testing.T) {
 	}
 }
 
+func TestRenderMultiplePages(t *testing.T) {
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{
+			"home.html":    `{{define "content"}}home{{end}}`,
+			"contact.html": `{{define "content"}}contact{{end}}`,
+		},
+	)
+
+	for _, tc := range []struct{ page, want string }{
+		{"home.html", "home"},
+		{"contact.html", "contact"},
+	} {
+		w := httptest.NewRecorder()
+		if err := app.Render(w, tc.page, nil); err != nil {
+			t.Fatalf("Render(%s): %v", tc.page, err)
+		}
+		if !strings.Contains(w.Body.String(), tc.want) {
+			t.Errorf("Render(%s): expected %q, got %s", tc.page, tc.want, w.Body.String())
+		}
+	}
+}
+
 func TestGet(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Get("/hello", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("hello"))
@@ -96,9 +132,10 @@ func TestGet(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Post("/submit", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("submitted"))
@@ -118,9 +155,10 @@ func TestPost(t *testing.T) {
 }
 
 func TestPut(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Put("/update", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("updated"))
@@ -137,9 +175,10 @@ func TestPut(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Delete("/remove", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("deleted"))
@@ -156,9 +195,10 @@ func TestDelete(t *testing.T) {
 }
 
 func TestWrapHandlesError(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Get("/fail", func(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("something went wrong")
@@ -174,9 +214,10 @@ func TestWrapHandlesError(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Get("/", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("home"))
@@ -193,9 +234,10 @@ func TestNotFound(t *testing.T) {
 }
 
 func TestRootDoesNotCatchAll(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.Get("/", func(w http.ResponseWriter, r *http.Request) error {
 		w.Write([]byte("home"))
@@ -212,9 +254,10 @@ func TestRootDoesNotCatchAll(t *testing.T) {
 }
 
 func TestCustomNotFound(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.NotFound(func(w http.ResponseWriter, r *http.Request) error {
 		w.WriteHeader(http.StatusNotFound)
@@ -235,9 +278,10 @@ func TestCustomNotFound(t *testing.T) {
 }
 
 func TestCustomError500(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	app.OnError(http.StatusInternalServerError, func(w http.ResponseWriter, r *http.Request) error {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -262,11 +306,11 @@ func TestCustomError500(t *testing.T) {
 }
 
 func TestErrHTTPTriggersOnError(t *testing.T) {
-	app := newTestApp(t, map[string]string{
-		"home.html": "<h1>Home</h1>",
-	})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
-	// sécurité : on répond 404 même quand c'est un 403
 	app.OnError(http.StatusForbidden, func(w http.ResponseWriter, r *http.Request) error {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("not found"))
@@ -291,12 +335,22 @@ func TestErrHTTPTriggersOnError(t *testing.T) {
 
 func TestViteDevMode(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "home.html"), []byte(`{{ vite "src/default/main.js" }}`), 0644)
+	layoutDir := filepath.Join(dir, "layouts")
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(layoutDir, 0755)
+	os.MkdirAll(pageDir, 0755)
+	os.WriteFile(filepath.Join(layoutDir, "base.html"), []byte(
+		`{{define "base"}}{{ vite "src/default/main.js" }}{{block "content" .}}{{end}}{{end}}`,
+	), 0644)
+	os.WriteFile(filepath.Join(pageDir, "home.html"), []byte(
+		`{{define "content"}}home{{end}}`,
+	), 0644)
 
 	app, err := httpd.New(httpd.Config{
-		TemplateDir: dir,
-		StaticDir:   dir,
-		Dev:         true,
+		LayoutDir: layoutDir,
+		PageDir:   pageDir,
+		StaticDir: dir,
+		Dev:       true,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -307,16 +361,18 @@ func TestViteDevMode(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	body := w.Body.String()
-	if !strings.Contains(body, "localhost:5173") {
-		t.Errorf("expected Vite dev server URL, got: %s", body)
+	if !strings.Contains(w.Body.String(), "localhost:5173") {
+		t.Errorf("expected Vite dev server URL, got: %s", w.Body.String())
 	}
 }
 
 func TestViteProdMode(t *testing.T) {
 	dir := t.TempDir()
+	layoutDir := filepath.Join(dir, "layouts")
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(layoutDir, 0755)
+	os.MkdirAll(pageDir, 0755)
 
-	// create a fake Vite manifest under the default theme subfolder
 	viteDir := filepath.Join(dir, "default", ".vite")
 	os.MkdirAll(viteDir, 0755)
 	manifest := map[string]any{
@@ -328,13 +384,19 @@ func TestViteProdMode(t *testing.T) {
 	data, _ := json.Marshal(manifest)
 	os.WriteFile(filepath.Join(viteDir, "manifest.json"), data, 0644)
 
-	os.WriteFile(filepath.Join(dir, "home.html"), []byte(`{{ vite "src/main.js" }}`), 0644)
+	os.WriteFile(filepath.Join(layoutDir, "base.html"), []byte(
+		`{{define "base"}}{{ vite "src/main.js" }}{{block "content" .}}{{end}}{{end}}`,
+	), 0644)
+	os.WriteFile(filepath.Join(pageDir, "home.html"), []byte(
+		`{{define "content"}}home{{end}}`,
+	), 0644)
 
 	app, err := httpd.New(httpd.Config{
-		TemplateDir: dir,
-		StaticDir:   dir,
-		StaticURL:   "/static/",
-		Dev:         false,
+		LayoutDir: layoutDir,
+		PageDir:   pageDir,
+		StaticDir: dir,
+		StaticURL: "/static/",
+		Dev:       false,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -356,6 +418,10 @@ func TestViteProdMode(t *testing.T) {
 
 func TestSetTheme(t *testing.T) {
 	dir := t.TempDir()
+	layoutDir := filepath.Join(dir, "layouts")
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(layoutDir, 0755)
+	os.MkdirAll(pageDir, 0755)
 
 	writeThemeManifest := func(theme, jsFile string) {
 		viteDir := filepath.Join(dir, theme, ".vite")
@@ -368,12 +434,18 @@ func TestSetTheme(t *testing.T) {
 
 	writeThemeManifest("default", "assets/main-default.js")
 	writeThemeManifest("autre", "assets/main-autre.js")
-	os.WriteFile(filepath.Join(dir, "home.html"), []byte(`{{ vite "src/main.js" }}`), 0644)
+	os.WriteFile(filepath.Join(layoutDir, "base.html"), []byte(
+		`{{define "base"}}{{ vite "src/main.js" }}{{block "content" .}}{{end}}{{end}}`,
+	), 0644)
+	os.WriteFile(filepath.Join(pageDir, "home.html"), []byte(
+		`{{define "content"}}home{{end}}`,
+	), 0644)
 
 	app, err := httpd.New(httpd.Config{
-		TemplateDir: dir,
-		StaticDir:   dir,
-		StaticURL:   "/static/",
+		LayoutDir: layoutDir,
+		PageDir:   pageDir,
+		StaticDir: dir,
+		StaticURL: "/static/",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -394,7 +466,10 @@ func TestSetTheme(t *testing.T) {
 }
 
 func TestStatic(t *testing.T) {
-	app := newTestApp(t, map[string]string{"home.html": "<h1>ok</h1>"})
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
 
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("zion"), 0644)
@@ -414,6 +489,10 @@ func TestStatic(t *testing.T) {
 
 func TestSetThemeInvalidName(t *testing.T) {
 	dir := t.TempDir()
+	layoutDir := filepath.Join(dir, "layouts")
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(layoutDir, 0755)
+	os.MkdirAll(pageDir, 0755)
 
 	viteDir := filepath.Join(dir, "default", ".vite")
 	os.MkdirAll(viteDir, 0755)
@@ -421,12 +500,18 @@ func TestSetThemeInvalidName(t *testing.T) {
 		"src/main.js": map[string]any{"file": "assets/main-default.js"},
 	})
 	os.WriteFile(filepath.Join(viteDir, "manifest.json"), data, 0644)
-	os.WriteFile(filepath.Join(dir, "home.html"), []byte(`{{ vite "src/main.js" }}`), 0644)
+	os.WriteFile(filepath.Join(layoutDir, "base.html"), []byte(
+		`{{define "base"}}{{ vite "src/main.js" }}{{block "content" .}}{{end}}{{end}}`,
+	), 0644)
+	os.WriteFile(filepath.Join(pageDir, "home.html"), []byte(
+		`{{define "content"}}home{{end}}`,
+	), 0644)
 
 	app, err := httpd.New(httpd.Config{
-		TemplateDir: dir,
-		StaticDir:   dir,
-		StaticURL:   "/static/",
+		LayoutDir: layoutDir,
+		PageDir:   pageDir,
+		StaticDir: dir,
+		StaticURL: "/static/",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

@@ -8,7 +8,8 @@ A minimal web framework in pure Go. No dependencies outside the standard library
 import "git.euflow.fr/flo/gowebflow/pkg/httpd"
 
 app, err := httpd.New(httpd.Config{
-    TemplateDir: "./ui/html",
+    LayoutDir: "./ui/layouts",
+    PageDir:   "./ui/pages",
 })
 if err != nil {
     log.Fatal(err)
@@ -19,6 +20,37 @@ app.Get("/", func(w http.ResponseWriter, r *http.Request) error {
 })
 
 log.Fatal(app.Listen(":8080"))
+```
+
+## Template structure
+
+```
+ui/
+  layouts/   → base.html  (defines the HTML shell)
+  pages/     → home.html, contact.html, ...
+  assets/    → css, js, fonts
+```
+
+**`ui/layouts/base.html`** — the layout, named `"base"` :
+
+```html
+{{define "base"}}
+<!DOCTYPE html>
+<html>
+<head>{{ vite "src/main.js" }}</head>
+<body>
+  {{block "content" .}}{{end}}
+</body>
+</html>
+{{end}}
+```
+
+**`ui/pages/home.html`** — a page, overrides the `"content"` block :
+
+```html
+{{define "content"}}
+<h1>{{ .Title }}</h1>
+{{end}}
 ```
 
 ## Routes
@@ -72,16 +104,12 @@ app.Get("/", func(w http.ResponseWriter, r *http.Request) error {
 })
 ```
 
-```html
-<h1>{{ .Title }}</h1>
-<p>Bonjour {{ .User }}</p>
-```
-
 ## Vite integration
 
 ```go
 app, err := httpd.New(httpd.Config{
-    TemplateDir: "./ui/html",
+    LayoutDir:   "./ui/layouts",
+    PageDir:     "./ui/pages",
     StaticDir:   "./ui/dist",   // root of all themes
     StaticURL:   "/static/",
     ActiveTheme: "default",     // serves from ui/dist/default/
@@ -90,15 +118,15 @@ app, err := httpd.New(httpd.Config{
 ```
 
 ```html
-<head>
-    {{ vite "src/default/main.js" }}
-</head>
+{{define "base"}}
+<head>{{ vite "src/default/main.js" }}</head>
+<body>{{block "content" .}}{{end}}</body>
+{{end}}
 ```
 
 ## Switching theme at runtime
 
 ```go
-// Switch theme without restarting the server
 app.Post("/admin/theme", func(w http.ResponseWriter, r *http.Request) error {
     return app.SetTheme(r.FormValue("name"))
 })
@@ -108,13 +136,14 @@ See [GETTING_STARTED.md](GETTING_STARTED.md) for the full multi-theme Vite setup
 
 ## Config
 
-| Field         | Type   | Default     | Description                                              |
-|---------------|--------|-------------|----------------------------------------------------------|
-| `TemplateDir` | string | —           | Path to the HTML templates folder                        |
-| `StaticDir`   | string | —           | Path to the Vite dist root folder (e.g. `./ui/dist`)     |
-| `StaticURL`   | string | —           | URL prefix for static assets (e.g. `/static/`)           |
-| `ActiveTheme` | string | `"default"` | Vite template subdirectory to serve (e.g. `"tpl_matrix"`) |
-| `Dev`         | bool   | `false`     | Enables Vite dev server mode + template hot reload       |
+| Field         | Type   | Default     | Description                                               |
+|---------------|--------|-------------|-----------------------------------------------------------|
+| `LayoutDir`   | string | —           | Path to the layouts folder (e.g. `./ui/layouts`)          |
+| `PageDir`     | string | —           | Path to the pages folder (e.g. `./ui/pages`)              |
+| `StaticDir`   | string | —           | Path to the Vite dist root folder (e.g. `./ui/dist`)      |
+| `StaticURL`   | string | —           | URL prefix for static assets (e.g. `/static/`)            |
+| `ActiveTheme` | string | `"default"` | Vite theme subdirectory to serve (e.g. `"tpl_matrix"`)    |
+| `Dev`         | bool   | `false`     | Enables Vite dev server mode + template hot reload        |
 
 ## Run tests
 

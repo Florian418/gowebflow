@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -17,6 +18,11 @@ type Config struct {
 	Dev         bool   // enables Vite dev server mode and template hot reload
 }
 
+type staticEntry struct {
+	prefix  string
+	handler http.Handler
+}
+
 // App is the central object of the framework.
 // It holds the router, the template engine and the configuration.
 type App struct {
@@ -27,6 +33,7 @@ type App struct {
 	mu            sync.RWMutex
 	activeTheme   string
 	errorHandlers map[int]HandlerFunc
+	statics       []staticEntry
 }
 
 // New creates and returns a new App with the given configuration.
@@ -67,15 +74,16 @@ func New(cfg Config) (*App, error) {
 			if err != nil {
 				return nil, err
 			}
-			// handler enregistré une fois, lit activeTheme à chaque requête
-			a.mux.Handle(cfg.StaticURL, http.StripPrefix(cfg.StaticURL,
+			// handler reads activeTheme on each request to support SetTheme
+			handler := http.StripPrefix(cfg.StaticURL,
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					a.mu.RLock()
 					theme := a.activeTheme
 					a.mu.RUnlock()
 					dir := filepath.Join(a.config.StaticDir, theme)
 					http.FileServer(http.Dir(dir)).ServeHTTP(w, r)
-				})))
+				}))
+			a.statics = append(a.statics, staticEntry{prefix: cfg.StaticURL, handler: handler})
 		}
 	}
 
@@ -88,7 +96,14 @@ func New(cfg Config) (*App, error) {
 
 // ServeHTTP implements the http.Handler interface.
 // This allows passing the App directly to http.ListenAndServe.
+// Static prefixes are checked before the mux to avoid pattern conflicts.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	for _, s := range a.statics {
+		if strings.HasPrefix(r.URL.Path, s.prefix) {
+			s.handler.ServeHTTP(w, r)
+			return
+		}
+	}
 	a.mux.ServeHTTP(w, r)
 }
 
@@ -100,7 +115,8 @@ func (a *App) Listen(addr string) error {
 // Static serves files from dir at the given URL prefix.
 // e.g. app.Static("/fonts/", "./ui/public/fonts")
 func (a *App) Static(prefix, dir string) {
-	a.mux.Handle(prefix, http.StripPrefix(prefix, http.FileServer(http.Dir(dir))))
+	handler := http.StripPrefix(prefix, http.FileServer(http.Dir(dir)))
+	a.statics = append(a.statics, staticEntry{prefix: prefix, handler: handler})
 }
 
 // NotFound registers a custom handler called when no route matches.

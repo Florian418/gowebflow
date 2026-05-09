@@ -487,6 +487,43 @@ func TestStatic(t *testing.T) {
 	}
 }
 
+func TestStaticCoexistsWithWildcardRoute(t *testing.T) {
+	app := newTestApp(t,
+		map[string]string{"base.html": baseLayout},
+		map[string]string{"home.html": `{{define "content"}}{{end}}`},
+	)
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "style.css"), []byte("body{}"), 0644)
+	app.Static("/assets/", dir)
+
+	app.Get("/{phase}/{page}", func(w http.ResponseWriter, r *http.Request) error {
+		phase := r.PathValue("phase")
+		page := r.PathValue("page")
+		w.Write([]byte(phase + "/" + page))
+		return nil
+	})
+
+	for _, tc := range []struct {
+		method, path string
+		wantCode     int
+		wantBody     string
+	}{
+		{"GET", "/assets/style.css", http.StatusOK, "body{}"},
+		{"GET", "/foo/bar", http.StatusOK, "foo/bar"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+		if w.Code != tc.wantCode {
+			t.Errorf("%s %s: expected %d, got %d", tc.method, tc.path, tc.wantCode, w.Code)
+		}
+		if !strings.Contains(w.Body.String(), tc.wantBody) {
+			t.Errorf("%s %s: expected %q, got %s", tc.method, tc.path, tc.wantBody, w.Body.String())
+		}
+	}
+}
+
 func TestSetThemeInvalidName(t *testing.T) {
 	dir := t.TempDir()
 	layoutDir := filepath.Join(dir, "layouts")

@@ -231,8 +231,20 @@ app, err := httpd.New(httpd.Config{
     StaticDir:   "./ui/dist",   // root — one subfolder per theme
     StaticURL:   "/static/",
     ActiveTheme: "default",
-    Dev:         true,          // false in production
+    Dev:         os.Getenv("APP_ENV") != "production",
 })
+```
+
+`Dev: true` tells gowebflow to use the Vite dev server. `Dev: false` switches to the built manifest (`dist/.vite/manifest.json`).
+
+Using an environment variable avoids hardcoding the value — no code change needed between environments:
+
+```bash
+# local dev — APP_ENV unset → Dev: true
+go run .
+
+# production
+APP_ENV=production go run .
 ```
 
 ### Use the vite template function

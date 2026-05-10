@@ -524,6 +524,27 @@ func TestStaticCoexistsWithWildcardRoute(t *testing.T) {
 	}
 }
 
+func TestRenderWithoutLayout(t *testing.T) {
+	dir := t.TempDir()
+	pageDir := filepath.Join(dir, "pages")
+	os.MkdirAll(pageDir, 0755)
+	os.WriteFile(filepath.Join(pageDir, "home.html"), []byte(`<h1>Hello</h1>`), 0644)
+
+	app, err := httpd.New(httpd.Config{PageDir: pageDir})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	if err := app.Render(w, "home.html", nil); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+
+	if !strings.Contains(w.Body.String(), "<h1>Hello</h1>") {
+		t.Errorf("unexpected body: %s", w.Body.String())
+	}
+}
+
 func TestSetThemeInvalidName(t *testing.T) {
 	dir := t.TempDir()
 	layoutDir := filepath.Join(dir, "layouts")

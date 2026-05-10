@@ -10,9 +10,7 @@ import (
 // It registers the "vite" template function for asset injection.
 // It is called automatically by New, and on every request in Dev mode.
 func (a *App) LoadTemplates() error {
-	pattern := filepath.Join(a.config.LayoutDir, "*.html")
-
-	tpl, err := template.New("").Funcs(template.FuncMap{
+	funcMap := template.FuncMap{
 		"vite": func(entry string) template.HTML {
 			a.mu.RLock()
 			v := a.vite
@@ -22,7 +20,17 @@ func (a *App) LoadTemplates() error {
 			}
 			return template.HTML(v.tag(entry))
 		},
-	}).ParseGlob(pattern)
+	}
+
+	if a.config.LayoutDir == "" {
+		a.mu.Lock()
+		a.templates = template.New("").Funcs(funcMap)
+		a.mu.Unlock()
+		return nil
+	}
+
+	pattern := filepath.Join(a.config.LayoutDir, "*.html")
+	tpl, err := template.New("").Funcs(funcMap).ParseGlob(pattern)
 	if err != nil {
 		return err
 	}
@@ -53,5 +61,9 @@ func (a *App) Render(w http.ResponseWriter, name string, data any) error {
 	if _, err = tpl.ParseFiles(pageFile); err != nil {
 		return err
 	}
-	return tpl.ExecuteTemplate(w, "base", data)
+	templateName := "base"
+	if a.config.LayoutDir == "" {
+		templateName = filepath.Base(name)
+	}
+	return tpl.ExecuteTemplate(w, templateName, data)
 }

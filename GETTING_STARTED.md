@@ -38,8 +38,11 @@ monsite/
 │   └── server/
 │       └── main.go
 ├── ui/
-│   ├── html/
-│   │   └── home.html
+│   ├── layouts/
+│   │   └── base.html       ← master layout
+│   ├── pages/
+│   │   ├── home.html
+│   │   └── about.html
 │   └── src/
 │       ├── main.js
 │       └── style.css
@@ -51,19 +54,22 @@ monsite/
 
 ## 4. Basic usage (without Vite)
 
+### With layout + pages
+
 **cmd/server/main.go**
 ```go
 package main
 
 import (
-    "git.euflow.fr/flo/gowebflow/pkg/httpd"
+    "github.com/Florian418/gowebflow/pkg/httpd"
     "log"
     "net/http"
 )
 
 func main() {
     app, err := httpd.New(httpd.Config{
-        TemplateDir: "./ui/html",
+        LayoutDir: "./ui/layouts",
+        PageDir:   "./ui/pages",
     })
     if err != nil {
         log.Fatal(err)
@@ -84,7 +90,7 @@ func main() {
 }
 ```
 
-**ui/html/home.html**
+**ui/layouts/base.html**
 ```html
 <!DOCTYPE html>
 <html lang="fr">
@@ -92,6 +98,34 @@ func main() {
     <meta charset="UTF-8">
     <title>Mon site</title>
 </head>
+<body>
+    {{block "content" .}}{{end}}
+</body>
+</html>
+```
+
+**ui/pages/home.html**
+```html
+{{define "content"}}
+<h1>Bienvenue</h1>
+{{end}}
+```
+
+### Pages only (no layout)
+
+If you don't need a shared layout, omit `LayoutDir`. Each page is rendered as a standalone template:
+
+```go
+app, err := httpd.New(httpd.Config{
+    PageDir: "./ui/pages",
+})
+```
+
+```html
+<!-- ui/pages/home.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><title>Mon site</title></head>
 <body>
     <h1>Bienvenue</h1>
 </body>
@@ -114,6 +148,10 @@ npm install --save-dev cross-env
 Clean up Vite demo files and set up the multi-theme structure:
 ```
 ui/
+├── layouts/
+│   └── base.html
+├── pages/
+│   └── home.html
 ├── src/
 │   └── default/        ← one folder per theme
 │       ├── main.js
@@ -129,10 +167,12 @@ ui/
 **ui/vite.config.js**
 ```js
 import { defineConfig } from 'vite'
+import url from 'node:url'
 
 const tpl = process.env.TPL || 'default'
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/static/' : '/',
   plugins: [
     {
       name: 'watch-go-templates',
@@ -144,7 +184,18 @@ export default defineConfig({
     }
   ],
   server: {
-    watch: { paths: ['html/**/*.html'] }
+    proxy: {
+      '/': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass(req) {
+          const u = req.url ?? ''
+          if (u.startsWith('/@') || u.startsWith('/node_modules') || u.startsWith('/src/')) {
+            return u
+          }
+        }
+      }
+    }
   },
   build: {
     manifest: true,
@@ -153,7 +204,7 @@ export default defineConfig({
       input: `src/${tpl}/main.js`
     }
   }
-})
+}))
 ```
 
 **ui/package.json scripts**
@@ -175,7 +226,8 @@ import './style.css'
 
 ```go
 app, err := httpd.New(httpd.Config{
-    TemplateDir: "./ui/html",
+    LayoutDir:   "./ui/layouts",
+    PageDir:     "./ui/pages",
     StaticDir:   "./ui/dist",   // root — one subfolder per theme
     StaticURL:   "/static/",
     ActiveTheme: "default",
@@ -185,6 +237,7 @@ app, err := httpd.New(httpd.Config{
 
 ### Use the vite template function
 
+**ui/layouts/base.html**
 ```html
 <!DOCTYPE html>
 <html lang="fr">
@@ -194,9 +247,16 @@ app, err := httpd.New(httpd.Config{
     {{ vite "src/default/main.js" }}
 </head>
 <body>
-    <h1>Bienvenue</h1>
+    {{block "content" .}}{{end}}
 </body>
 </html>
+```
+
+**ui/pages/home.html**
+```html
+{{define "content"}}
+<h1>Bienvenue</h1>
+{{end}}
 ```
 
 ### Adding a new theme
@@ -204,7 +264,7 @@ app, err := httpd.New(httpd.Config{
 1. Create `ui/src/<name>/main.js` (and `style.css`)
 2. Add `"build:<name>": "cross-env TPL=<name> vite build"` to `package.json`
 3. Add `&& npm run build:<name>` to `build:all`
-4. Use `{{ vite "src/<name>/main.js" }}` in your Go templates
+4. Use `{{ vite "src/<name>/main.js" }}` in your layout
 
 ### Switching theme at runtime
 
@@ -227,6 +287,8 @@ You need two terminals:
 cd ui
 npm run dev
 ```
+
+Vite proxies all non-asset requests to the Go server, so you only open `http://localhost:5173` in your browser.
 
 **Terminal 2 — Go server with air (Go hot reload)**
 
@@ -282,8 +344,10 @@ app.Get("/user", func(w http.ResponseWriter, r *http.Request) error {
 ```
 
 ```html
+{{define "content"}}
 <h1>Bonjour {{ .Name }}</h1>
 {{ if .Admin }}<p>Vous êtes administrateur</p>{{ end }}
+{{end}}
 ```
 
 ---
@@ -296,7 +360,7 @@ Register custom handlers for 404, 500, or any HTTP code:
 // 404 — page non trouvée
 app.NotFound(func(w http.ResponseWriter, r *http.Request) error {
     w.WriteHeader(http.StatusNotFound)
-    return app.Render(w, "404.html", nil)
+    return app.Render(w, "404.html", r.URL.Path)
 })
 
 // 500 — masqué en 404 (le client ne sait pas si le serveur a crashé)

@@ -3,7 +3,7 @@ package httpd_test
 import (
 	"encoding/json"
 	"fmt"
-	"git.euflow.fr/flo/gowebflow/pkg/httpd"
+	"github.com/Florian418/gowebflow/pkg/httpd"
 	"net/http"
 	"net/http/httptest"
 	"os"

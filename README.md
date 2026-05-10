@@ -5,7 +5,7 @@ A minimal web framework in pure Go. No dependencies outside the standard library
 ## Quick start
 
 ```go
-import "git.euflow.fr/flo/gowebflow/pkg/httpd"
+import "github.com/Florian418/gowebflow/pkg/httpd"
 
 app, err := httpd.New(httpd.Config{
     LayoutDir: "./ui/layouts",

@@ -1,5 +1,24 @@
 # Migration guide
 
+## v0.3.0 — CLI de scaffolding `gwf` (aucun breaking change)
+
+### Ce qui change
+
+Ajout du binaire `gwf` dans `cmd/gwf`. L'API du framework est inchangée.
+
+```
+go install github.com/Florian418/gowebflow/cmd/gwf@latest
+
+gwf new monsite          # projet de base (Go + Air)
+gwf new monsite --vite   # avec Vite + Air
+```
+
+### Projets existants
+
+Aucune migration nécessaire. Le CLI ne sert qu'à créer de nouveaux projets.
+
+---
+
 ## v0.2.0 — Layout+block rendering (breaking)
 
 ### Ce qui change

@@ -2,6 +2,7 @@ package httpd
 
 import (
 	"errors"
+	"log"
 	"net/http"
 )
 
@@ -67,6 +68,7 @@ func (a *App) wrap(h HandlerFunc) http.HandlerFunc {
 		if err == nil {
 			return
 		}
+		log.Printf("ERROR %s %s: %v", r.Method, r.URL.Path, err)
 		code := http.StatusInternalServerError
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) {

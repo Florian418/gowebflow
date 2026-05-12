@@ -1,6 +1,6 @@
 doc/
 design/
-php2go.exe
+*.exe
 php2go
 
 # Assets Vite (générés)
@@ -9,6 +9,7 @@ static/dist/
 # Go
 *.test
 go.work*
+tmp/
 
 # IA
 CLAUDE.md

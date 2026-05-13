@@ -2,6 +2,12 @@
 
 Framework web minimal en Go pur. Aucune dépendance hors bibliothèque standard.
 
+## Philosophie
+
+Les handlers retournent une `error` — le framework l'intercepte, la logge, et appelle le bon handler d'erreur. Tu décides ce que le navigateur reçoit.
+
+Ça veut dire que masquer un 500 ou un 403 en 404 est un choix explicite. Ne pas révéler si une ressource est interdite ou si le serveur a crashé est une décision de sécurité — goWebFlow t'en donne le contrôle.
+
 ## Démarrage rapide
 
 ```

@@ -1,5 +1,7 @@
 # goWebFlow
 
+[![CI](https://github.com/Florian418/gowebflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Florian418/gowebflow/actions/workflows/ci.yml)
+
 Framework web minimal en Go pur. Aucune dépendance hors bibliothèque standard.
 
 ## Philosophie

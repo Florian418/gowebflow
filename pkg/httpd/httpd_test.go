@@ -361,8 +361,12 @@ func TestViteDevMode(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	if !strings.Contains(w.Body.String(), "localhost:5173") {
-		t.Errorf("expected Vite dev server URL, got: %s", w.Body.String())
+	body := w.Body.String()
+	if !strings.Contains(body, `src="/@vite/client"`) {
+		t.Errorf("expected /@vite/client, got: %s", body)
+	}
+	if !strings.Contains(body, `src="/src/default/main.js"`) {
+		t.Errorf("expected relative entry URL, got: %s", body)
 	}
 }
 

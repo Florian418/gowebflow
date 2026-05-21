@@ -39,12 +39,12 @@ func loadManifest(staticDir, staticURL string) (*viteManifest, error) {
 }
 
 // tag generates the HTML script and link tags for a given Vite entry point.
-// In Dev mode, it points to the Vite dev server (localhost:5173).
+// In Dev mode, it emits relative URLs (/@vite/client, /<entry>) so the Vite proxy handles them regardless of port.
 // In production mode, it reads hashed filenames from the manifest.
 func (v *viteManifest) tag(entry string) string {
 	if v.dev {
-		return `<script type="module" src="http://localhost:5173/@vite/client"></script>` + "\n" +
-			`<script type="module" src="http://localhost:5173/` + entry + `"></script>`
+		return `<script type="module" src="/@vite/client"></script>` + "\n" +
+			`<script type="module" src="/` + entry + `"></script>`
 	}
 
 	e, ok := v.entries[entry]
